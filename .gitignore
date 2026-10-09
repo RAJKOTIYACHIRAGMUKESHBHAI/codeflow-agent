@@ -1,0 +1,21 @@
+﻿# IntelliJ / IDE
+.idea/
+*.iml
+
+# Java / Maven
+backend/target/
+*.class
+
+# React / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+application-local.properties
+
+# Generated coding-agent workspaces
+workspaces/
+backend/workspaces/
