@@ -1,0 +1,6 @@
+target/
+generated-workspace/
+.git/
+.idea/
+*.iml
+.env

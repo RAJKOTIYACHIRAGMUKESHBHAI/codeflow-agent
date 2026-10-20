@@ -19,3 +19,9 @@ application-local.properties
 # Generated coding-agent workspaces
 workspaces/
 backend/workspaces/
+# Generated workspaces and build output
+backend/generated-workspace/
+# Temporary backups
+*.bak
+*.backup
+*.zip-backup
