@@ -25,3 +25,5 @@ backend/generated-workspace/
 *.bak
 *.backup
 *.zip-backup
+
+target/
