@@ -12,7 +12,7 @@ FROM maven:3.9-eclipse-temurin-17
 WORKDIR /app
 
 RUN useradd --system --uid 10001 --create-home appuser \
-    && mkdir -p /app/generated-workspace /home/appuser/.m2/repository \
+    && mkdir -p /app/generated-workspace/tasks /home/appuser/.m2/repository \
     && chown -R appuser:appuser /app /home/appuser
 
 COPY --from=build /app/target/*.jar app.jar

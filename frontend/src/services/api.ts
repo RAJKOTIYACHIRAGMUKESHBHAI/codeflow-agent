@@ -35,7 +35,7 @@ export type HealthStatus = {
 };
 
 export const API_BASE_URL =
-  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
+  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081').replace(/\/+$/, '');
 
 const parseJson = async <T>(response: Response): Promise<T | null> => {
   const text = await response.text();
@@ -68,7 +68,13 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
         ? String((payload as { error?: string }).error)
         : payload && typeof payload === 'object' && 'message' in payload
           ? String((payload as { message?: string }).message)
-          : `Request failed (${response.status})`;
+          : payload && typeof payload === 'object' && 'detail' in payload
+            ? String((payload as { detail?: string }).detail)
+            : payload && typeof payload === 'object' && 'title' in payload
+              ? String((payload as { title?: string }).title)
+              : typeof payload === 'string' && payload.trim()
+                ? payload
+                : `Request failed (${response.status})`;
 
     throw new Error(details);
   }
@@ -81,6 +87,9 @@ export const createTask = async (requirement: string): Promise<CodingTask> =>
     method: 'POST',
     body: JSON.stringify({ requirement }),
   });
+
+export const getTasks = async (): Promise<CodingTask[]> =>
+  request<CodingTask[]>('/api/tasks');
 
 export const getTask = async (taskId: string): Promise<CodingTask> =>
   request<CodingTask>(`/api/tasks/${encodeURIComponent(taskId)}`);

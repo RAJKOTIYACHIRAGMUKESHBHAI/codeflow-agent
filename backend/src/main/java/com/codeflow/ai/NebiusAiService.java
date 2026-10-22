@@ -63,7 +63,7 @@ public class NebiusAiService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(
                         baseUrl + "/chat/completions"))
-                .timeout(Duration.ofSeconds(60))
+                .timeout(Duration.ofSeconds(180))
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(

@@ -7,6 +7,7 @@ import {
   generatePlan,
   getHealth,
   getTask,
+  getTasks,
   type CodingTask,
   type TaskStatus,
 } from './services/api';
@@ -95,6 +96,14 @@ function App() {
 
   useEffect(() => {
     void checkHealth();
+    void getTasks()
+      .then((tasks) => {
+        setTasksById(Object.fromEntries(tasks.map((task) => [task.id, task] as const)));
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : 'Unable to load tasks.';
+        setUiMessage({ type: 'error', text: message });
+      });
   }, []);
 
   useEffect(() => {
@@ -331,7 +340,7 @@ function App() {
               <>
                 <section className="stats-grid" aria-label="Overview statistics">
                   <StatCard label="Total tasks" value={stats.total} accent="purple" detail="Created in session" />
-                  <StatCard label="Active" value={stats.active} accent="amber" detail="Planning or execution" />
+                  <StatCard label="Active" value={stats.active} accent="amber" detail="Planning or execution" onClick={() => { const task = Object.values(tasksById).find((item) => !terminalStates.has(item.status)); if (task) void openTaskDetails(task.id); else setUiMessage({ type: "error", text: "No active tasks found." }); }} />
                   <StatCard label="Completed" value={stats.completed} accent="green" detail="Successful outcomes" />
                   <StatCard label="Failed" value={stats.failed} accent="red" detail="Needs attention" />
                 </section>
@@ -562,9 +571,21 @@ function StatusBadge({ status }: { status: TaskStatus }) {
   return <span className={className}>{label}</span>;
 }
 
-function StatCard({ label, value, accent, detail }: StatCardProps) {
+function StatCard({ label, value, accent, detail, onClick }: StatCardProps & { onClick?: () => void }) {
   return (
-      <article className={`stat-card ${accent}`}>
+      <article
+        className={`stat-card ${accent}`}
+        onClick={onClick}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onClick();
+          }
+        } : undefined}
+        style={onClick ? { cursor: "pointer" } : undefined}
+      >
         <p className="mini-label">{label}</p>
         <strong>{value}</strong>
         <span>{detail}</span>

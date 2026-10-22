@@ -19,36 +19,73 @@ public class AiPlanningService {
         this.taskService = taskService;
     }
 
-    public String createPlan(String taskId) throws Exception {
+    public synchronized String createPlan(String taskId) throws Exception {
         CodingTask task = taskService.getTask(taskId);
 
-        taskService.updateTaskStatus(
-                taskId, TaskStatus.PLANNING);
+        // A repeated request should reuse an already generated plan.
+        if (task.getStatus() == TaskStatus.WAITING_FOR_APPROVAL
+                && task.getPlan() != null
+                && !task.getPlan().isBlank()) {
+            return task.getPlan();
+        }
+
+        // Do not silently restart failed or in-progress tasks.
+        if (task.getStatus() != TaskStatus.CREATED) {
+            String detail = task.getErrorMessage() == null
+                    || task.getErrorMessage().isBlank()
+                    ? ""
+                    : ". Previous error: " + task.getErrorMessage();
+
+            throw new IllegalStateException(
+                    "Cannot generate a plan for task in status "
+                            + task.getStatus() + detail);
+        }
+
+        taskService.updateTaskStatus(taskId, TaskStatus.PLANNING);
 
         String prompt = """
-                You are a software engineering planning assistant.
-                Create a concise implementation plan for this task.
-                Include:
-                1. Required changes
-                2. Files likely to be affected
-                3. Testing strategy
-                Do not claim that any files have been modified.
-                Return the plan only.
+            You are a senior Java 17 software engineer.
+            This project uses Java and Maven.
+            Plan only Java 17 solutions with JUnit 5 tests.
+            Never suggest Node.js, JavaScript, npm, Express,
+            or .js files for this project.
+            Prefer the smallest implementation that satisfies
+            the user's requirement.
+            Include:
+            1. Required changes
+            2. Java production and test files
+            3. Testing strategy
+            Do not claim that files have been modified.
+            Return the plan only.
 
-                Task requirement:
-                """ + task.getRequirement();
+            Task requirement:
+            """ + task.getRequirement();
 
         try {
             String plan = nebiusAiService.generateResponse(prompt);
-            taskService.updatePlan(taskId, plan);
 
+            if (plan == null || plan.isBlank()) {
+                throw new IllegalStateException(
+                        "AI returned an empty implementation plan");
+            }
+
+            taskService.updatePlan(taskId, plan);
             taskService.updateTaskStatus(
                     taskId, TaskStatus.WAITING_FOR_APPROVAL);
 
             return plan;
         } catch (Exception ex) {
-            taskService.updateErrorMessage(taskId, ex.getMessage());
-            taskService.updateTaskStatus(taskId, TaskStatus.FAILED);
+            taskService.updateErrorMessage(
+                    taskId,
+                    ex.getMessage() == null
+                            ? ex.getClass().getSimpleName()
+                            : ex.getMessage());
+
+            CodingTask current = taskService.getTask(taskId);
+            if (current.getStatus() == TaskStatus.PLANNING) {
+                taskService.updateTaskStatus(taskId, TaskStatus.FAILED);
+            }
+
             throw ex;
         }
     }
