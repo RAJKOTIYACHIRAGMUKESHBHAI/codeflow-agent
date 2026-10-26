@@ -18,38 +18,45 @@ public class CodeExecutionService {
     private static final Pattern PUBLIC_TYPE_PATTERN =
             Pattern.compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
 
+    // Updated POM_CONTENT with Spring Boot & Thymeleaf Dependencies
     private static final String POM_CONTENT = """
             <project xmlns="http://maven.apache.org/POM/4.0.0"
                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                      xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
                 <modelVersion>4.0.0</modelVersion>
+                <parent>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-parent</artifactId>
+                    <version>3.2.0</version>
+                    <relativePath/>
+                </parent>
                 <groupId>com.codeflow.generated</groupId>
                 <artifactId>generated-task</artifactId>
                 <version>1.0-SNAPSHOT</version>
                 <properties>
-                    <maven.compiler.release>17</maven.compiler.release>
+                    <java.version>17</java.version>
                     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-                    <junit.version>5.11.4</junit.version>
                 </properties>
                 <dependencies>
                     <dependency>
-                        <groupId>org.junit.jupiter</groupId>
-                        <artifactId>junit-jupiter</artifactId>
-                        <version>${junit.version}</version>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-web</artifactId>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-thymeleaf</artifactId>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-test</artifactId>
                         <scope>test</scope>
                     </dependency>
                 </dependencies>
                 <build>
                     <plugins>
                         <plugin>
-                            <groupId>org.apache.maven.plugins</groupId>
-                            <artifactId>maven-compiler-plugin</artifactId>
-                            <version>3.13.0</version>
-                        </plugin>
-                        <plugin>
-                            <groupId>org.apache.maven.plugins</groupId>
-                            <artifactId>maven-surefire-plugin</artifactId>
-                            <version>3.5.2</version>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-maven-plugin</artifactId>
                         </plugin>
                     </plugins>
                 </build>
@@ -77,32 +84,63 @@ public class CodeExecutionService {
 
         CodingTask task = taskService.getTask(taskId);
         if (task.getStatus() != TaskStatus.APPROVED) {
-            throw new IllegalStateException(
-                    "Task must be approved before execution");
+            throw new IllegalStateException("Task must be approved before execution");
         }
 
         try {
-            // Start from a clean, task-specific directory on every execution attempt.
             workspaceFileService.resetTaskWorkspace(taskId);
             Path project = workspaceFileService.getTaskDirectory(taskId);
 
             taskService.updateTaskStatus(taskId, TaskStatus.APPLYING_CHANGES);
             workspaceFileService.writeFile("tasks/" + taskId + "/pom.xml", POM_CONTENT);
 
-            String generatedCode = codeGenerationService.generateCode(task);
-            String generatedTests =
-                    codeGenerationService.generateTests(task, generatedCode);
+            AiCodeGenerationService.TaskType taskType = codeGenerationService.determineTaskType(task);
 
-            String sourcePath = sourcePathFor(generatedCode);
-            String testPath = testPathFor(generatedTests);
+            String sourcePath = "";
+            String testPath = "";
+            String testOutput = "";
 
-            workspaceFileService.writeFile(
-                    "tasks/" + taskId + "/" + sourcePath, generatedCode);
-            workspaceFileService.writeFile(
-                    "tasks/" + taskId + "/" + testPath, generatedTests);
+            if (taskType == AiCodeGenerationService.TaskType.PURE_UI) {
+                // 1. PURE UI TASK
+                String generatedCode = codeGenerationService.generateCode(task);
+                sourcePath = uiSourcePathFor(generatedCode);
+                workspaceFileService.writeFile("tasks/" + taskId + "/" + sourcePath, generatedCode);
 
-            taskService.updateTaskStatus(taskId, TaskStatus.TESTING);
-            String testOutput = mavenTestRunner.runTests(project);
+                taskService.updateTaskStatus(taskId, TaskStatus.TESTING);
+                testOutput = "UI Changes Applied Successfully. Maven build skipped.";
+
+            } else if (taskType == AiCodeGenerationService.TaskType.FULL_STACK) {
+                // 2. FULL STACK TASK (Java Controller + HTML Template)
+                String generatedCode = codeGenerationService.generateCode(task);
+                String generatedTests = codeGenerationService.generateTests(task, generatedCode);
+                String generatedHtml = codeGenerationService.generateHtmlTemplate(task);
+
+                sourcePath = sourcePathFor(generatedCode);
+                testPath = testPathFor(generatedTests);
+                String htmlPath = "src/main/resources/templates/profile.html";
+
+                workspaceFileService.writeFile("tasks/" + taskId + "/" + sourcePath, generatedCode);
+                workspaceFileService.writeFile("tasks/" + taskId + "/" + testPath, generatedTests);
+                workspaceFileService.writeFile("tasks/" + taskId + "/" + htmlPath, generatedHtml);
+
+                taskService.updateTaskStatus(taskId, TaskStatus.TESTING);
+                testOutput = mavenTestRunner.runTests(project);
+
+            } else {
+                // 3. PURE JAVA BACKEND TASK
+                String generatedCode = codeGenerationService.generateCode(task);
+                String generatedTests = codeGenerationService.generateTests(task, generatedCode);
+
+                sourcePath = sourcePathFor(generatedCode);
+                testPath = testPathFor(generatedTests);
+
+                workspaceFileService.writeFile("tasks/" + taskId + "/" + sourcePath, generatedCode);
+                workspaceFileService.writeFile("tasks/" + taskId + "/" + testPath, generatedTests);
+
+                taskService.updateTaskStatus(taskId, TaskStatus.TESTING);
+                testOutput = mavenTestRunner.runTests(project);
+            }
+
             taskService.updateTaskStatus(taskId, TaskStatus.COMPLETED);
 
             return Map.of(
@@ -110,9 +148,9 @@ public class CodeExecutionService {
                     "status", taskService.getTask(taskId).getStatus().name(),
                     "project", project.toString(),
                     "sourceFile", project.resolve(sourcePath).toString(),
-                    "testFile", project.resolve(testPath).toString(),
+                    "testFile", taskType == AiCodeGenerationService.TaskType.PURE_UI ? "N/A" : project.resolve(testPath).toString(),
                     "testOutput", testOutput,
-                    "message", "Generated project tests passed"
+                    "message", taskType == AiCodeGenerationService.TaskType.PURE_UI ? "UI task executed successfully" : "Generated project tests passed"
             );
         } catch (Exception ex) {
             String message = ex.getMessage() == null || ex.getMessage().isBlank()
@@ -131,6 +169,15 @@ public class CodeExecutionService {
         }
     }
 
+    private String uiSourcePathFor(String source) {
+        if (source.contains("<html") || source.contains("<!DOCTYPE html") || source.contains("<footer") || source.contains("<div")) {
+            return "src/main/resources/templates/dashboard.html";
+        } else if (source.contains("{") && source.contains("}")) {
+            return "src/main/resources/static/css/style.css";
+        }
+        return "src/main/resources/templates/index.html";
+    }
+
     private String sourcePathFor(String source) {
         return javaSourcePath(source, "Generated implementation", "main");
     }
@@ -146,8 +193,7 @@ public class CodeExecutionService {
 
         Matcher typeMatcher = PUBLIC_TYPE_PATTERN.matcher(source);
         if (!typeMatcher.find()) {
-            throw new IllegalStateException(
-                    description + " must contain a public Java type declaration");
+            throw new IllegalStateException(description + " must contain a valid Java type declaration");
         }
 
         String className = typeMatcher.group(1);

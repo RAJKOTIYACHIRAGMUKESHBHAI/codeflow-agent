@@ -1,0 +1,160 @@
+
+package com.codeflow.ai;
+
+import com.codeflow.task.CodingTask;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AiCodeGenerationService {
+
+    private final NebiusAiService nebiusAiService;
+
+    public AiCodeGenerationService(NebiusAiService nebiusAiService) {
+        this.nebiusAiService = nebiusAiService;
+    }
+
+    public String generateCode(CodingTask task) throws Exception {
+        validateTask(task);
+
+        String prompt = """
+                You are a Java source-code generator.
+                Generate exactly ONE complete production Java class.
+                Do not generate unit tests.
+                Follow the approved plan and requirements.
+                Use the package and class name specified by the plan.
+                Include all imports before the class declaration.
+                Return source code only, without Markdown fences or explanations.
+                Never include a second class or package declaration.
+                Do not claim that files were saved or tests were run.
+
+                REQUIREMENTS:
+                %s
+
+                APPROVED PLAN:
+                %s
+                """.formatted(
+                task.getRequirement(),
+                task.getPlan());
+
+        return validateCodeResponse(
+                nebiusAiService.generateResponse(prompt));
+    }
+
+    public String generateTests(
+            CodingTask task, String generatedCode) throws Exception {
+
+        validateTask(task);
+
+        if (generatedCode == null || generatedCode.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Generated implementation must not be empty");
+        }
+
+        String prompt = """
+                You are a Java unit-test generator.
+                Generate exactly ONE complete JUnit 5 test class.
+                The test class MUST have a public class declaration,
+                for example: public class GreetingTest.
+                Never use a package-private test class.
+                Include all required imports before the class declaration.
+                Use the same package as the production implementation.
+                Test the supplied implementation and task requirements.
+                For a simple method, prefer one focused test that verifies
+                the exact expected result. Do not add unnecessary edge cases.
+                Include @Test and JUnit 5 assertions.
+                Return only complete Java source code.
+                Do not use Markdown fences or explanatory text.
+                Do not include a second package declaration.
+                Do not claim that tests were executed.
+
+                REQUIREMENTS:
+                %s
+
+                APPROVED PLAN:
+                %s
+
+                PRODUCTION IMPLEMENTATION:
+                %s
+                """.formatted(
+                task.getRequirement(),
+                task.getPlan(),
+                generatedCode);
+
+        return validateTestResponse(
+                nebiusAiService.generateResponse(prompt));
+    }
+
+    private void validateTask(CodingTask task) {
+        if (task == null
+                || task.getPlan() == null
+                || task.getPlan().isBlank()) {
+            throw new IllegalArgumentException(
+                    "An approved implementation plan is required");
+        }
+    }
+
+    public static String cleanMarkdownFences(String response) {
+        if (response == null) {
+            return "";
+        }
+
+        String trimmed = response.trim();
+
+        if (trimmed.startsWith("```")) {
+            int firstNewline = trimmed.indexOf('\n');
+
+            if (firstNewline != -1) {
+                trimmed = trimmed.substring(firstNewline + 1);
+            }
+
+            if (trimmed.endsWith("```")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 3);
+            }
+        }
+
+        return trimmed.trim();
+    }
+
+    private String validateCodeResponse(String response) {
+        String cleaned = cleanMarkdownFences(response);
+
+        if (cleaned.isBlank()) {
+            throw new IllegalStateException(
+                    "AI returned empty source code");
+        }
+
+        if (!cleaned.contains("class ")
+                && !cleaned.contains("interface ")
+                && !cleaned.contains("record ")
+                && !cleaned.contains("enum ")) {
+            throw new IllegalStateException(
+                    "AI returned unusable code: no Java type declaration found");
+        }
+
+        return cleaned;
+    }
+
+    private String validateTestResponse(String response) {
+        String cleaned = cleanMarkdownFences(response);
+
+        if (cleaned.isBlank()) {
+            throw new IllegalStateException(
+                    "AI returned empty test code");
+        }
+
+        if (!cleaned.contains("@Test")) {
+            throw new IllegalStateException(
+                    "AI returned unusable tests: no JUnit @Test method found");
+        }
+
+        if (!java.util.regex.Pattern.compile(
+                "(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+[A-Za-z_$][\\w$]*")
+                .matcher(cleaned).find()) {
+            throw new IllegalStateException(
+                    "AI returned test code without a public Java type declaration. Regenerate the test class.");
+        }
+
+        return cleaned;
+    }
+}
+

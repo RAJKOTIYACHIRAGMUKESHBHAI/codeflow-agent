@@ -200,6 +200,7 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to generate a plan.';
       setUiMessage({ type: 'error', text: message });
+        await refreshTask(selectedTaskId);
     } finally {
       setPendingAction(null);
     }
@@ -220,6 +221,7 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Approval failed.';
       setUiMessage({ type: 'error', text: message });
+        await refreshTask(selectedTaskId);
     } finally {
       setPendingAction(null);
     }
@@ -252,6 +254,7 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Execution failed.';
       setUiMessage({ type: 'error', text: message });
+        await refreshTask(selectedTaskId);
     } finally {
       setPendingAction(null);
     }

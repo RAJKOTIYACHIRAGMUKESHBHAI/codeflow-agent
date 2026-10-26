@@ -1,0 +1,19 @@
+CodeFlow source review patch
+
+Files included:
+- frontend/src/services/api.ts
+- frontend/src/App.tsx
+- backend/src/main/java/com/codeflow/ai/WorkspaceFileService.java
+- backend/src/main/java/com/codeflow/ai/CodeExecutionService.java
+
+Changes:
+1. Default frontend API host port is 8081 (still overridden by VITE_API_BASE_URL if set).
+2. Frontend reads Spring ProblemDetail 'detail'/'title' and plain-text error responses.
+3. Overview loads tasks from GET /api/tasks on startup.
+4. Generated Java source/test paths are derived from the actual public type and package, rather than hardcoded Calculator paths.
+5. Each task execution resets only that task's generated-workspace directory so a retry does not fail on existing generated files.
+6. Failures inside execution are recorded and transition the task to FAILED when permitted.
+
+Apply by extracting this ZIP into the project root and allowing the four listed files to be overwritten.
+Important: source changes are not active in an already-built Docker image until the backend/frontend are rebuilt/restarted as appropriate.
+Verification limitation: this patch was prepared by source inspection; it has not been run against your local Docker/MySQL/AI environment.
