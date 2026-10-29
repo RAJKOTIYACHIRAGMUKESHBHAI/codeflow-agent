@@ -20,6 +20,8 @@ public class AiCodeGenerationService {
     private static final Pattern MARKDOWN_CODE_FENCE_PATTERN =
             Pattern.compile("```(?:[a-zA-Z0-9_-]+)?\\s*\\R([\\s\\S]*?)\\R```");
 
+    private static final Pattern TEST_TYPE_PATTERN =
+        Pattern.compile("(?m)\\b(?:(?:public|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
     private static final Pattern PUBLIC_TYPE_PATTERN =
             Pattern.compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
 
@@ -287,7 +289,7 @@ public class AiCodeGenerationService {
         String cleaned = cleanMarkdownFences(source);
         if (cleaned.isBlank()) return cleaned;
 
-        Matcher typeMatcher = PUBLIC_TYPE_PATTERN.matcher(cleaned);
+        Matcher typeMatcher = TEST_TYPE_PATTERN.matcher(cleaned);
         if (!typeMatcher.find()) return cleaned;
 
         String packageDeclaration = "";
@@ -305,7 +307,7 @@ public class AiCodeGenerationService {
         String bodyWithoutPackageOrImports = PACKAGE_PATTERN.matcher(cleaned).replaceAll("");
         bodyWithoutPackageOrImports = IMPORT_LINE_PATTERN.matcher(bodyWithoutPackageOrImports).replaceAll("");
 
-        Matcher bodyTypeMatcher = PUBLIC_TYPE_PATTERN.matcher(bodyWithoutPackageOrImports);
+        Matcher bodyTypeMatcher = TEST_TYPE_PATTERN.matcher(bodyWithoutPackageOrImports);
         if (!bodyTypeMatcher.find()) return cleaned;
 
         String classAndRemaining = bodyWithoutPackageOrImports.substring(bodyTypeMatcher.start()).trim();
@@ -342,7 +344,7 @@ public class AiCodeGenerationService {
             return;
         }
 
-        Matcher typeMatcher = PUBLIC_TYPE_PATTERN.matcher(source);
+        Matcher typeMatcher = TEST_TYPE_PATTERN.matcher(source);
 
         if (!typeMatcher.find()) {
             throw new IllegalStateException(
