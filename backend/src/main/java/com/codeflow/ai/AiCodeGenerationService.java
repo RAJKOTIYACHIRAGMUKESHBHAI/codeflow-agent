@@ -145,13 +145,11 @@ public class AiCodeGenerationService {
 
         String prompt = """
                 You are a Java unit-test generator.
-                Generate a MINIMAL, single complete JUnit 5 test class.
-                The test class MUST have a public class declaration.
-                Include imports:
-                import org.junit.jupiter.api.Test;
-                import static org.junit.jupiter.api.Assertions.*;
-
-                Keep method short. Return Java source code only without Markdown fences.
+                Generate one complete JUnit 5 test class.
+                The class must have a public class declaration.
+                Include JUnit 5 Test and Assertions imports.
+                Keep all methods and annotations inside the class body.
+                Return Java source code only, without Markdown fences.
 
                 REQUIREMENTS:
                 %s
@@ -160,15 +158,53 @@ public class AiCodeGenerationService {
                 %s
                 """.formatted(task.getRequirement(), generatedCode);
 
+        String firstResponse;
+
         try {
-            String response = nebiusAiService.generateResponse(prompt);
-            return validateTestResponse(response);
+            firstResponse = nebiusAiService.generateResponse(prompt);
         } catch (Exception ex) {
-            // Guaranteed Fallback Test Generator if AI output is truncated or invalid
             return createFallbackTestClass(generatedCode);
         }
-    }
 
+        try {
+            return validateTestResponse(firstResponse);
+        } catch (Exception firstFailure) {
+            String repairPrompt = """
+                    Repair the malformed Java JUnit 5 test source below.
+                    Return one complete Java test class only.
+                    Keep all methods and annotations inside the class body.
+                    Keep package and import declarations outside the class.
+                    Balance all braces.
+                    Include the JUnit 5 Test and Assertions imports.
+
+                    Validation error:
+                    %s
+
+                    Malformed test source:
+                    %s
+
+                    Production implementation:
+                    %s
+                    """.formatted(
+                    firstFailure.getMessage(),
+                    firstResponse,
+                    generatedCode
+            );
+
+            try {
+                String repairedResponse =
+                        nebiusAiService.generateResponse(repairPrompt);
+
+                return validateTestResponse(repairedResponse);
+            } catch (Exception repairFailure) {
+                throw new IllegalStateException(
+                        "Unable to generate valid JUnit tests after repair: "
+                                + repairFailure.getMessage(),
+                        repairFailure
+                );
+            }
+        }
+    }
     public String createFallbackTestClass(String generatedCode) {
         String className = "ApplicationTest";
         if (generatedCode != null && !generatedCode.isBlank()) {
@@ -307,13 +343,17 @@ public class AiCodeGenerationService {
         }
 
         Matcher typeMatcher = PUBLIC_TYPE_PATTERN.matcher(source);
+
         if (!typeMatcher.find()) {
-            throw new IllegalStateException("AI returned test code without a valid Java type declaration.");
+            throw new IllegalStateException(
+                    "AI returned test code without a valid Java type declaration.");
         }
 
         int openBrace = source.indexOf('{', typeMatcher.end());
+
         if (openBrace == -1) {
-            throw new IllegalStateException("Malformed test source: missing opening brace for class body");
+            throw new IllegalStateException(
+                    "Malformed test source: missing opening brace for class body");
         }
 
         int depth = 0;
@@ -321,9 +361,17 @@ public class AiCodeGenerationService {
 
         for (int i = openBrace; i < source.length(); i++) {
             char c = source.charAt(i);
-            if (c == '{') depth++;
-            else if (c == '}') {
+
+            if (c == '{') {
+                depth++;
+            } else if (c == '}') {
                 depth--;
+
+                if (depth < 0) {
+                    throw new IllegalStateException(
+                            "Malformed test source: unclosed class body or unbalanced braces");
+                }
+
                 if (depth == 0) {
                     closeBrace = i;
                     break;
@@ -332,15 +380,50 @@ public class AiCodeGenerationService {
         }
 
         if (depth != 0 || closeBrace == -1) {
-            throw new IllegalStateException("Malformed test source: unclosed class body");
+            throw new IllegalStateException(
+                    "Malformed test source: unclosed class body or unbalanced braces");
+        }
+
+        String prefix = source.substring(0, typeMatcher.start()).trim();
+        String suffix = source.substring(closeBrace + 1).trim();
+
+        if (containsExecutableContentOutsideClass(prefix)
+                || containsExecutableContentOutsideClass(suffix)) {
+            throw new IllegalStateException(
+                    "Malformed test source: content found outside the class body");
         }
 
         String classBody = source.substring(openBrace, closeBrace + 1);
+
         if (!classBody.contains("@Test")) {
-            throw new IllegalStateException("AI returned unusable tests: no JUnit @Test method found inside class body");
+            throw new IllegalStateException(
+                    "AI returned unusable tests: no JUnit @Test method found inside class body");
         }
     }
 
+    private static boolean containsExecutableContentOutsideClass(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+
+        for (String line : text.split("\\R")) {
+            String trimmed = line.trim();
+
+            if (trimmed.isEmpty()
+                    || trimmed.startsWith("package ")
+                    || trimmed.startsWith("import ")
+                    || trimmed.startsWith("//")
+                    || trimmed.startsWith("/*")
+                    || trimmed.startsWith("*")
+                    || trimmed.startsWith("*/")) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
     public String validateTestResponse(String response) {
         String cleaned = extractJavaCode(response);
         if (cleaned.isBlank()) throw new IllegalStateException("AI returned empty test code");

@@ -12,9 +12,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class MavenTestRunner {
+
+    private static final long TEST_TIMEOUT_SECONDS = 120;
 
     private final Path mavenWrapper;
     private final boolean windows;
@@ -70,6 +73,8 @@ public class MavenTestRunner {
         }
 
         command.add(mavenWrapper.toString());
+        command.add("-B");
+        command.add("-ntp");
         command.add("-f");
         command.add(pom.toString());
         command.add("test");
@@ -90,20 +95,69 @@ public class MavenTestRunner {
                     }
                 });
 
-        if (!process.waitFor(120, TimeUnit.SECONDS)) {
-            process.descendants()
-                    .forEach(ProcessHandle::destroyForcibly);
-            process.destroyForcibly();
-            throw new IllegalStateException("Maven tests timed out");
+        boolean completed;
+
+        try {
+            completed = process.waitFor(
+                    TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            terminateProcess(process);
+            Thread.currentThread().interrupt();
+            throw e;
         }
 
-        String output = outputFuture.join();
+        if (!completed) {
+            terminateProcess(process);
+
+            String output = collectOutput(outputFuture);
+
+            throw new IllegalStateException(
+                    "Maven tests timed out after "
+                            + TEST_TIMEOUT_SECONDS
+                            + " seconds.\n"
+                            + "Maven output before timeout:\n"
+                            + output);
+        }
+
+        String output = collectOutput(outputFuture);
 
         if (process.exitValue() != 0) {
             throw new IllegalStateException(
-                    "Maven tests failed:\n" + output);
+                    "Maven tests failed with exit code "
+                            + process.exitValue()
+                            + ":\n"
+                            + output);
         }
 
         return output;
+    }
+
+    private void terminateProcess(Process process) {
+        process.descendants()
+                .forEach(ProcessHandle::destroyForcibly);
+
+        process.destroyForcibly();
+
+        try {
+            process.waitFor(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private String collectOutput(
+            CompletableFuture<String> outputFuture) {
+
+        try {
+            return outputFuture.get(5, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            return "[Maven output could not be fully collected.]";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "[Interrupted while collecting Maven output.]";
+        } catch (java.util.concurrent.ExecutionException e) {
+            return "[Could not read Maven output: "
+                    + e.getCause() + "]";
+        }
     }
 }
