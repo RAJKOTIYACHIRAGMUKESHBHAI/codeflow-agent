@@ -14,11 +14,11 @@ import java.util.regex.Pattern;
 public class CodeExecutionService {
 
     private static final Pattern PACKAGE_PATTERN =
-            Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_\$][\\w\$]*(?:\\.[A-Za-z_\$][\\w\$]*)*)\\s*;");
+            Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
     private static final Pattern PUBLIC_TYPE_PATTERN =
-            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_\$][\\w\$]*)");
+            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
     private static final Pattern TEST_TYPE_PATTERN =
-            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_\$][\\w\$]*)");
+            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
 
     // Updated POM_CONTENT with Spring Boot & Thymeleaf Dependencies
     private static final String POM_CONTENT = """
