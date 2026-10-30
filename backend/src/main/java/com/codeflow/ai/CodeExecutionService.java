@@ -1,4 +1,4 @@
-package com.codeflow.ai;
+﻿package com.codeflow.ai;
 
 import com.codeflow.task.CodingTask;
 import com.codeflow.task.TaskService;
@@ -16,7 +16,9 @@ public class CodeExecutionService {
     private static final Pattern PACKAGE_PATTERN =
             Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
     private static final Pattern PUBLIC_TYPE_PATTERN =
-            Pattern.compile("(?m)\\bpublic\\s+(?:(?:abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
+            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
+    private static final Pattern TEST_TYPE_PATTERN =
+            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
 
     // Updated POM_CONTENT with Spring Boot & Thymeleaf Dependencies
     private static final String POM_CONTENT = """
@@ -93,6 +95,11 @@ public class CodeExecutionService {
 
             taskService.updateTaskStatus(taskId, TaskStatus.APPLYING_CHANGES);
             workspaceFileService.writeFile("tasks/" + taskId + "/pom.xml", POM_CONTENT);
+
+            // Post-reset: Plan se saari 4 files (DTO, Controller, HTML, Test) auto-extract karke disk par write hongi
+            if (task.getPlan() != null && !task.getPlan().isBlank()) {
+                workspaceFileService.extractAndWriteAllPlanFiles(taskId, task.getPlan());
+            }
 
             AiCodeGenerationService.TaskType taskType = codeGenerationService.determineTaskType(task);
 
@@ -191,7 +198,11 @@ public class CodeExecutionService {
             throw new IllegalStateException(description + " is empty");
         }
 
-        Matcher typeMatcher = PUBLIC_TYPE_PATTERN.matcher(source);
+        Pattern typePattern = "test".equals(sourceSet)
+                ? TEST_TYPE_PATTERN
+                : PUBLIC_TYPE_PATTERN;
+
+        Matcher typeMatcher = typePattern.matcher(source);
         if (!typeMatcher.find()) {
             throw new IllegalStateException(description + " must contain a valid Java type declaration");
         }
