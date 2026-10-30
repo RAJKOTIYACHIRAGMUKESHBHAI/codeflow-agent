@@ -1,4 +1,4 @@
-﻿package com.codeflow.ai;
+package com.codeflow.ai;
 
 import com.codeflow.task.CodingTask;
 import com.codeflow.task.TaskService;
@@ -14,11 +14,11 @@ import java.util.regex.Pattern;
 public class CodeExecutionService {
 
     private static final Pattern PACKAGE_PATTERN =
-            Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_$][\\w$]*(?:\\.[A-Za-z_$][\\w$]*)*)\\s*;");
+            Pattern.compile("(?m)^\\s*package\\s+([A-Za-z_\$][\\w\$]*(?:\\.[A-Za-z_\$][\\w\$]*)*)\\s*;");
     private static final Pattern PUBLIC_TYPE_PATTERN =
-            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
+            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|sealed|non-sealed|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_\$][\\w\$]*)");
     private static final Pattern TEST_TYPE_PATTERN =
-            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
+            Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_\$][\\w\$]*)");
 
     // Updated POM_CONTENT with Spring Boot & Thymeleaf Dependencies
     private static final String POM_CONTENT = """
@@ -96,7 +96,6 @@ public class CodeExecutionService {
             taskService.updateTaskStatus(taskId, TaskStatus.APPLYING_CHANGES);
             workspaceFileService.writeFile("tasks/" + taskId + "/pom.xml", POM_CONTENT);
 
-            // Post-reset: Plan se saari 4 files (DTO, Controller, HTML, Test) auto-extract karke disk par write hongi
             if (task.getPlan() != null && !task.getPlan().isBlank()) {
                 workspaceFileService.extractAndWriteAllPlanFiles(taskId, task.getPlan());
             }
@@ -108,7 +107,6 @@ public class CodeExecutionService {
             String testOutput = "";
 
             if (taskType == AiCodeGenerationService.TaskType.PURE_UI) {
-                // 1. PURE UI TASK
                 String generatedCode = codeGenerationService.generateCode(task);
                 sourcePath = uiSourcePathFor(generatedCode);
                 workspaceFileService.writeFile("tasks/" + taskId + "/" + sourcePath, generatedCode);
@@ -117,7 +115,6 @@ public class CodeExecutionService {
                 testOutput = "UI Changes Applied Successfully. Maven build skipped.";
 
             } else if (taskType == AiCodeGenerationService.TaskType.FULL_STACK) {
-                // 2. FULL STACK TASK (Java Controller + HTML Template)
                 String generatedCode = codeGenerationService.generateCode(task);
                 String generatedTests = codeGenerationService.generateTests(task, generatedCode);
                 String generatedHtml = codeGenerationService.generateHtmlTemplate(task);
@@ -134,7 +131,6 @@ public class CodeExecutionService {
                 testOutput = mavenTestRunner.runTests(project);
 
             } else {
-                // 3. PURE JAVA BACKEND TASK
                 String generatedCode = codeGenerationService.generateCode(task);
                 String generatedTests = codeGenerationService.generateTests(task, generatedCode);
 
