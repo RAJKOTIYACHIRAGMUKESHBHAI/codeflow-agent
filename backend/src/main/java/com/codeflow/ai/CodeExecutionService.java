@@ -20,7 +20,7 @@ public class CodeExecutionService {
     private static final Pattern TEST_TYPE_PATTERN =
             Pattern.compile("(?m)\\b(?:(?:public|protected|private|abstract|final|strictfp)\\s+)*(?:class|record|enum|interface)\\s+([A-Za-z_$][\\w$]*)");
 
-    // Updated POM_CONTENT with Spring Boot & Thymeleaf Dependencies
+    // Updated POM_CONTENT with Spring Boot, Thymeleaf, JPA & H2 Database Dependencies
     private static final String POM_CONTENT = """
             <project xmlns="http://maven.apache.org/POM/4.0.0"
                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -47,6 +47,15 @@ public class CodeExecutionService {
                     <dependency>
                         <groupId>org.springframework.boot</groupId>
                         <artifactId>spring-boot-starter-thymeleaf</artifactId>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-data-jpa</artifactId>
+                    </dependency>
+                    <dependency>
+                        <groupId>com.h2database</groupId>
+                        <artifactId>h2</artifactId>
+                        <scope>runtime</scope>
                     </dependency>
                     <dependency>
                         <groupId>org.springframework.boot</groupId>
